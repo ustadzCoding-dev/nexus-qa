@@ -30,16 +30,67 @@ export async function PATCH(request: Request, context: RouteContext) {
     return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
   }
 
-  const { status } = body as { status?: string };
+  const { status, title, description, severity, evidenceUrl } = body as {
+    status?: string;
+    title?: string;
+    description?: string | null;
+    severity?: string;
+    evidenceUrl?: string | null;
+  };
 
-  if (!status || !ALLOWED_STATUSES.includes(status as AllowedStatus)) {
-    return NextResponse.json({ error: "Invalid status value" }, { status: 400 });
+  const data: Record<string, unknown> = {};
+
+  if (typeof status !== "undefined") {
+    if (!status || !ALLOWED_STATUSES.includes(status as AllowedStatus)) {
+      return NextResponse.json({ error: "Invalid status value" }, { status: 400 });
+    }
+    data.status = status;
+  }
+
+  if (typeof title !== "undefined") {
+    if (typeof title !== "string" || !title.trim()) {
+      return NextResponse.json({ error: "Invalid title" }, { status: 400 });
+    }
+    data.title = title.trim().slice(0, 200);
+  }
+
+  if (typeof description !== "undefined") {
+    if (description === null) {
+      data.description = null;
+    } else if (typeof description === "string") {
+      const d = description.trim();
+      data.description = d.length > 0 ? d : null;
+    } else {
+      return NextResponse.json({ error: "Invalid description" }, { status: 400 });
+    }
+  }
+
+  if (typeof severity !== "undefined") {
+    if (typeof severity !== "string" || !severity.trim()) {
+      return NextResponse.json({ error: "Invalid severity" }, { status: 400 });
+    }
+    data.severity = severity.trim().slice(0, 50);
+  }
+
+  if (typeof evidenceUrl !== "undefined") {
+    if (evidenceUrl === null) {
+      data.evidenceUrl = null;
+    } else if (typeof evidenceUrl === "string") {
+      const e = evidenceUrl.trim();
+      data.evidenceUrl = e.length > 0 ? e : null;
+    } else {
+      return NextResponse.json({ error: "Invalid evidenceUrl" }, { status: 400 });
+    }
+  }
+
+  if (Object.keys(data).length === 0) {
+    return NextResponse.json({ error: "No valid fields to update" }, { status: 400 });
   }
 
   try {
     const updated = await prisma.defect.update({
       where: { id },
-      data: { status },
+      data,
     });
 
     return NextResponse.json({ defect: updated });

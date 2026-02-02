@@ -3,6 +3,8 @@ import { prisma } from "@/lib/prisma";
 import TestCaseStepsEditor from "./TestCaseStepsEditor";
 import RunWithMaestroButton from "./RunWithMaestroButton";
 import AutomationPanel from "./AutomationPanel";
+import NewSuiteForm from "./NewSuiteForm";
+import NewTestCaseInlineForm from "./NewTestCaseInlineForm";
 
 type ResolvedSearchParams = {
   caseId?: string;
@@ -94,8 +96,36 @@ function TestCaseGridView({
               Back to Projects
             </Link>
           </header>
-          <div className="rounded-lg border border-dashed border-neutral-800 bg-neutral-900/60 px-6 py-10 text-center text-sm text-neutral-400">
-            Seed data has created a demo project, but no test cases were found.
+
+          <div className="space-y-4">
+            <div className="rounded-lg border border-dashed border-neutral-800 bg-neutral-900/60 px-6 py-6 text-sm text-neutral-400">
+              <p>
+                Start by creating a test suite for this project, then add test cases under each
+                suite.
+              </p>
+            </div>
+
+            <NewSuiteForm projectId={project.id} />
+
+            {suites.length > 0 && (
+              <div className="rounded-lg border border-neutral-800 bg-neutral-900/60 px-4 py-3 text-xs text-neutral-200">
+                <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-neutral-400">
+                  Suites
+                </div>
+                <div className="space-y-2">
+                  {suites.map((suite: SuiteWithCases) => (
+                    <div key={suite.id} className="rounded-md border border-neutral-800 bg-neutral-950/80">
+                      <div className="flex items-center justify-between px-3 py-2">
+                        <div className="truncate text-[11px] font-semibold uppercase tracking-wide text-neutral-300">
+                          {suite.title}
+                        </div>
+                      </div>
+                      <NewTestCaseInlineForm suiteId={suite.id} />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -133,6 +163,8 @@ function TestCaseGridView({
             </p>
           </div>
         </header>
+
+        <NewSuiteForm projectId={project.id} />
 
         <form
           method="GET"
@@ -184,11 +216,12 @@ function TestCaseGridView({
             </div>
             <div className="max-h-[540px] space-y-2 overflow-auto px-2 py-2 text-xs">
               {filteredSuites.map((suite: SuiteWithCases) => (
-                <div key={suite.id} className="space-y-1">
-                  <div className="truncate px-2 text-[11px] font-semibold uppercase tracking-wide text-neutral-400">
+                <div key={suite.id} className="space-y-1 rounded-md border border-transparent hover:border-neutral-800">
+                  <div className="truncate px-2 pt-1 text-[11px] font-semibold uppercase tracking-wide text-neutral-400">
                     {suite.title}
                   </div>
-                  <div className="space-y-0.5">
+                  <NewTestCaseInlineForm suiteId={suite.id} />
+                  <div className="space-y-0.5 pb-1">
                     {suite.testCases.map((testCase: TestCaseWithRelations) => {
                       const isActive = testCase.id === activeCase.id;
 

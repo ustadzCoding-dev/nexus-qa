@@ -1,5 +1,7 @@
 import Link from "next/link";
+import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import NewProjectForm from "./NewProjectForm";
 
 type ProjectRow = {
   id: string;
@@ -13,9 +15,20 @@ type ProjectRow = {
   passRate: number;
 };
 
-type ProjectWithRelations = Awaited<
-  ReturnType<typeof prisma.project.findMany>
->[number];
+type ProjectWithRelations = Prisma.ProjectGetPayload<{
+  include: {
+    requirements: true;
+    suites: {
+      include: {
+        testCases: {
+          include: {
+            results: true;
+          };
+        };
+      };
+    };
+  };
+}>;
 
 async function getProjects(): Promise<ProjectRow[]> {
   const projects = await prisma.project.findMany({
@@ -92,15 +105,10 @@ export default async function ProjectsPage() {
             >
               Home
             </Link>
-            <button
-              type="button"
-              className="rounded-md bg-neutral-100 px-3 py-1.5 text-sm font-medium text-neutral-900 hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
-              disabled
-            >
-              New Project
-            </button>
           </div>
         </header>
+
+        <NewProjectForm />
 
         {projects.length === 0 ? (
           <div className="rounded-lg border border-dashed border-neutral-800 bg-neutral-900/60 px-6 py-10 text-center text-sm text-neutral-400">

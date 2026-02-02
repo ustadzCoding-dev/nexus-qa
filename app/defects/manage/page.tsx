@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import DefectStatusSelect from "../DefectStatusSelect";
+import DefectDetailsEditor from "../DefectDetailsEditor";
 
 async function getDefectsForManage() {
   return prisma.defect.findMany({
@@ -92,6 +93,13 @@ function DefectsManageTable({ defects }: { defects: DefectRow[] }) {
                         {defect.description}
                       </div>
                     )}
+                    <DefectDetailsEditor
+                      defectId={defect.id}
+                      initialTitle={defect.title}
+                      initialSeverity={defect.severity}
+                      initialDescription={defect.description}
+                      initialEvidenceUrl={defect.evidenceUrl}
+                    />
                   </div>
                 </td>
                 <td className="px-3 py-2 align-top">

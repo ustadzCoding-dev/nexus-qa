@@ -1,6 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
+import RequirementLinksEditor from "./RequirementLinksEditor";
+import NewRequirementForm from "./NewRequirementForm";
+import ProjectTestDataSection from "./ProjectTestDataSection";
 
 type ProjectPageProps = {
   params: Promise<{
@@ -18,6 +21,9 @@ export default async function ProjectDetailPage({ params }: ProjectPageProps) {
   const [project, requirements, testCases, groupedResults] = await Promise.all([
     prisma.project.findUnique({
       where: { id },
+      include: {
+        testData: true,
+      },
     }),
     prisma.requirement.findMany({
       where: { projectId: id },
@@ -36,6 +42,15 @@ export default async function ProjectDetailPage({ params }: ProjectPageProps) {
       },
       select: {
         id: true,
+        title: true,
+        suite: {
+          select: {
+            title: true,
+          },
+        },
+      },
+      orderBy: {
+        title: "asc",
       },
     }),
     prisma.testResult.groupBy({
@@ -64,6 +79,12 @@ export default async function ProjectDetailPage({ params }: ProjectPageProps) {
     requirementsCount > 0 ? Math.round((requirementsWithCases / requirementsCount) * 100) : 0;
 
   const totalTestCases = testCases.length;
+
+  const testCaseOptions = testCases.map((tc) => ({
+    id: tc.id,
+    title: tc.title,
+    suiteTitle: tc.suite.title,
+  }));
 
   let totalResults = 0;
   let passed = 0;
@@ -132,6 +153,8 @@ export default async function ProjectDetailPage({ params }: ProjectPageProps) {
             </p>
           </div>
 
+          <NewRequirementForm projectId={project.id} />
+
           {requirements.length === 0 ? (
             <div className="rounded-lg border border-dashed border-neutral-800 bg-neutral-900/60 px-6 py-8 text-center text-sm text-neutral-400">
               No requirements found for this project.
@@ -161,7 +184,14 @@ export default async function ProjectDetailPage({ params }: ProjectPageProps) {
                           {req.code}
                         </td>
                         <td className="px-4 py-3 text-sm text-neutral-100">
-                          {req.title}
+                          <div className="space-y-1">
+                            <div>{req.title}</div>
+                            <RequirementLinksEditor
+                              requirementId={req.id}
+                              initialLinkedIds={req.testCases.map((tc) => tc.id)}
+                              allTestCases={testCaseOptions}
+                            />
+                          </div>
                         </td>
                         <td className="px-4 py-3 text-right text-sm tabular-nums">
                           {linkedCount}
@@ -184,6 +214,19 @@ export default async function ProjectDetailPage({ params }: ProjectPageProps) {
               </table>
             </div>
           )}
+        </section>
+
+        <section className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold tracking-tight text-neutral-200">
+              Test data catalog
+            </h2>
+            <p className="text-xs text-neutral-500">
+              Centralize reusable test data (accounts, configs, URLs) for this project.
+            </p>
+          </div>
+
+          <ProjectTestDataSection projectId={project.id} initialItems={project.testData} />
         </section>
       </div>
     </div>
