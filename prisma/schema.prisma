@@ -1,0 +1,119 @@
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// --- STRATEGY, PLANNING & RTM (Doc 1, 2, 9) ---
+model Project {
+  id            String         @id @default(uuid())
+  name          String
+  strategy      String?        @db.Text
+  requirements  Requirement[]
+  suites        TestSuite[]
+  testData      TestData[]
+  milestones    Milestone[]
+  createdAt     DateTime       @default(now())
+}
+
+model Requirement {
+  id          String     @id @default(uuid())
+  code        String     // Contoh: REQ-001
+  title       String
+  description String?
+  projectId   String
+  project     Project    @relation(fields: [projectId], references: [id])
+  testCases   TestCase[]
+}
+
+model Milestone {
+  id          String    @id @default(uuid())
+  name        String
+  startDate   DateTime
+  endDate     DateTime
+  projectId   String
+  project     Project   @relation(fields: [projectId], references: [id])
+}
+
+// --- OPERATIONAL & DESIGN (Doc 3, 4, 5) ---
+model TestSuite {
+  id          String     @id @default(uuid())
+  title       String
+  description String?
+  projectId   String
+  project     Project    @relation(fields: [projectId], references: [id])
+  testCases   TestCase[]
+}
+
+model TestCase {
+  id             String      @id @default(uuid())
+  title          String
+  preCondition   String?
+  priority       String      @default("P2")
+  suiteId        String
+  suite          TestSuite   @relation(fields: [suiteId], references: [id])
+  requirements   Requirement[]
+  steps          TestStep[]
+  automationYaml String?
+  results        TestResult[]
+}
+
+model TestStep {
+  id         String   @id @default(uuid())
+  order      Int
+  action     String
+  expected   String
+  testCaseId String
+  testCase   TestCase @relation(fields: [testCaseId], references: [id], onDelete: Cascade)
+}
+
+model TestData {
+  id        String   @id @default(uuid())
+  key       String
+  value     String
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id])
+}
+
+// --- EXECUTION & DEFECTS (Doc 6, 7, 8) ---
+model TestRun {
+  id          String       @id @default(uuid())
+  name        String
+  environment String
+  results     TestResult[]
+  createdAt   DateTime     @default(now())
+}
+
+model TestResult {
+  id           String   @id @default(uuid())
+  testRunId    String
+  testRun      TestRun  @relation(fields: [testRunId], references: [id])
+  testCaseId   String
+  testCase     TestCase @relation(fields: [testCaseId], references: [id])
+  status       Status   @default(UNTESTED)
+  actualResult String?
+  defects      Defect[]
+}
+
+model Defect {
+  id           String     @id @default(uuid())
+  title        String
+  severity     String
+  status       String     @default("OPEN")
+  evidenceUrl  String?
+  description  String?
+  testResultId String
+  testResult   TestResult @relation(fields: [testResultId], references: [id])
+}
+
+enum Status {
+  PASSED
+  FAILED
+  BLOCKED
+  SKIPPED
+  UNTESTED
+}
