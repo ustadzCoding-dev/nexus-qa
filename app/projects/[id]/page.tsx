@@ -1,9 +1,12 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
+import type { Prisma } from "@prisma/client";
 import RequirementLinksEditor from "./RequirementLinksEditor";
 import NewRequirementForm from "./NewRequirementForm";
 import ProjectTestDataSection from "./ProjectTestDataSection";
+import NewMilestoneForm from "./NewMilestoneForm";
+import MilestoneActions from "./MilestoneActions";
 
 type ProjectPageProps = {
   params: Promise<{
@@ -11,17 +14,24 @@ type ProjectPageProps = {
   }>;
 };
 
-type RequirementWithCases = Awaited<
-  ReturnType<typeof prisma.requirement.findMany>
->[number];
+type RequirementWithCases = Prisma.RequirementGetPayload<{
+  include: {
+    testCases: true;
+  };
+}>;
 
 export default async function ProjectDetailPage({ params }: ProjectPageProps) {
   const { id } = await params;
 
-  const [project, requirements, testCases, groupedResults] = await Promise.all([
+  const [project, requirements, testCases, groupedResults, projectResults] = await Promise.all([
     prisma.project.findUnique({
       where: { id },
       include: {
+        milestones: {
+          orderBy: {
+            startDate: "asc",
+          },
+        },
         testData: true,
       },
     }),
@@ -66,6 +76,24 @@ export default async function ProjectDetailPage({ params }: ProjectPageProps) {
         _all: true,
       },
     }),
+    prisma.testResult.findMany({
+      where: {
+        testCase: {
+          suite: {
+            projectId: id,
+          },
+        },
+      },
+      include: {
+        testRun: true,
+        testCase: {
+          include: {
+            requirements: true,
+          },
+        },
+        defects: true,
+      },
+    }),
   ]);
 
   if (!project) {
@@ -101,6 +129,90 @@ export default async function ProjectDetailPage({ params }: ProjectPageProps) {
   }
 
   const passRate = totalResults > 0 ? Math.round((passed / totalResults) * 100) : 0;
+
+  const milestones = project.milestones;
+  const totalRequirementsForMilestones = requirementsCount;
+
+  const milestoneSummaries = milestones.map((milestone) => {
+    const resultsInWindow = projectResults.filter((result) => {
+      const createdAt = result.testRun.createdAt;
+      return createdAt >= milestone.startDate && createdAt <= milestone.endDate;
+    });
+
+    let windowTotalResults = 0;
+    let windowPassed = 0;
+    let windowFailed = 0;
+    let windowBlocked = 0;
+    let windowSkipped = 0;
+    let windowUntested = 0;
+
+    const runIds = new Set<string>();
+    const requirementIdsWithPass = new Set<string>();
+    let defectCount = 0;
+    let openDefects = 0;
+
+    for (const result of resultsInWindow) {
+      windowTotalResults += 1;
+      runIds.add(result.testRunId);
+
+      switch (result.status) {
+        case "PASSED":
+          windowPassed += 1;
+          break;
+        case "FAILED":
+          windowFailed += 1;
+          break;
+        case "BLOCKED":
+          windowBlocked += 1;
+          break;
+        case "SKIPPED":
+          windowSkipped += 1;
+          break;
+        case "UNTESTED":
+          windowUntested += 1;
+          break;
+        default:
+          break;
+      }
+
+      if (result.status === "PASSED") {
+        for (const req of result.testCase.requirements) {
+          requirementIdsWithPass.add(req.id);
+        }
+      }
+
+      for (const defect of result.defects) {
+        defectCount += 1;
+        if (defect.status === "OPEN" || defect.status === "IN_PROGRESS") {
+          openDefects += 1;
+        }
+      }
+    }
+
+    const runsCount = runIds.size;
+    const windowPassRate = windowTotalResults > 0 ? Math.round((windowPassed / windowTotalResults) * 100) : 0;
+    const requirementsWithPass = requirementIdsWithPass.size;
+    const requirementCoverageForMilestone =
+      totalRequirementsForMilestones > 0
+        ? Math.round((requirementsWithPass / totalRequirementsForMilestones) * 100)
+        : 0;
+
+    return {
+      milestone,
+      runsCount,
+      windowTotalResults,
+      windowPassed,
+      windowFailed,
+      windowBlocked,
+      windowSkipped,
+      windowUntested,
+      windowPassRate,
+      requirementsWithPass,
+      requirementCoverageForMilestone,
+      defectCount,
+      openDefects,
+    };
+  });
 
   return (
     <div className="min-h-screen bg-neutral-950 text-neutral-50">
@@ -188,7 +300,9 @@ export default async function ProjectDetailPage({ params }: ProjectPageProps) {
                             <div>{req.title}</div>
                             <RequirementLinksEditor
                               requirementId={req.id}
-                              initialLinkedIds={req.testCases.map((tc) => tc.id)}
+                              initialLinkedIds={req.testCases.map(
+                                (tc: RequirementWithCases["testCases"][number]) => tc.id,
+                              )}
                               allTestCases={testCaseOptions}
                             />
                           </div>
@@ -206,6 +320,116 @@ export default async function ProjectDetailPage({ params }: ProjectPageProps) {
                           >
                             {covered ? "COVERED" : "GAP"}
                           </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+
+        <section className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold tracking-tight text-neutral-200">
+              Milestones & progress
+            </h2>
+            <p className="text-xs text-neutral-500">
+              Time-boxed view of requirement coverage, execution, and defects for this project.
+            </p>
+          </div>
+
+          <NewMilestoneForm projectId={project.id} />
+
+          {milestones.length === 0 ? (
+            <div className="rounded-lg border border-dashed border-neutral-800 bg-neutral-900/60 px-6 py-8 text-center text-sm text-neutral-400">
+              No milestones defined for this project yet.
+            </div>
+          ) : (
+            <div className="overflow-hidden rounded-lg border border-neutral-800 bg-neutral-900/60">
+              <table className="min-w-full border-collapse text-sm">
+                <thead className="bg-neutral-900/80">
+                  <tr>
+                    <th className="px-4 py-3 text-left font-medium text-neutral-300">Milestone</th>
+                    <th className="px-4 py-3 text-left font-medium text-neutral-300">Requirements</th>
+                    <th className="px-4 py-3 text-left font-medium text-neutral-300">Execution</th>
+                    <th className="px-4 py-3 text-right font-medium text-neutral-300">Defects</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {milestoneSummaries.map((row) => {
+                    const m = row.milestone;
+
+                    return (
+                      <tr
+                        key={m.id}
+                        className="border-t border-neutral-800/80 hover:bg-neutral-800/40"
+                      >
+                        <td className="px-4 py-3 align-top text-sm text-neutral-100">
+                          <div className="flex flex-col gap-1">
+                            <div className="space-y-0.5">
+                              <div className="font-medium">{m.name}</div>
+                              <div className="text-xs text-neutral-400">
+                                {m.startDate.toLocaleDateString()} {" to "}
+                                {m.endDate.toLocaleDateString()}
+                              </div>
+                            </div>
+                            <MilestoneActions
+                              milestoneId={m.id}
+                              initialName={m.name}
+                              initialStartDate={m.startDate.toISOString()}
+                              initialEndDate={m.endDate.toISOString()}
+                            />
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 align-top text-sm text-neutral-100">
+                          <div className="space-y-1">
+                            <div className="text-xs text-neutral-200">
+                              {row.requirementsWithPass}/{totalRequirementsForMilestones} requirements
+                              &nbsp;with at least one PASSED result
+                            </div>
+                            <div className="text-xs text-neutral-400">
+                              Coverage in this window:&nbsp;
+                              <span className="font-semibold text-neutral-100">
+                                {row.requirementCoverageForMilestone}%
+                              </span>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 align-top text-sm text-neutral-100">
+                          {row.windowTotalResults === 0 ? (
+                            <span className="text-xs text-neutral-400">No runs in this window</span>
+                          ) : (
+                            <div className="space-y-1 text-xs text-neutral-200">
+                              <div>
+                                <span className="font-semibold">{row.runsCount}</span> runs,
+                                &nbsp;
+                                <span className="font-semibold">{row.windowTotalResults}</span> results
+                              </div>
+                              <div className="text-neutral-400">
+                                Pass rate:&nbsp;
+                                <span className="font-semibold text-emerald-300">
+                                  {row.windowPassRate}%
+                                </span>
+                                &nbsp;· Passed {row.windowPassed}, Failed {row.windowFailed}
+                              </div>
+                            </div>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 align-top text-right text-xs text-neutral-100">
+                          <div className="space-y-1">
+                            <div>
+                              <span className="font-semibold">{row.defectCount}</span> defects
+                              &nbsp;linked to runs in this window
+                            </div>
+                            <div className="text-neutral-400">
+                              <span className="font-semibold text-rose-300">
+                                {row.openDefects}
+                              </span>{" "}
+                              open / in progress
+                            </div>
+                          </div>
                         </td>
                       </tr>
                     );

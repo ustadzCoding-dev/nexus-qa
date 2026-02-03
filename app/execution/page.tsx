@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import ResultStatusControl from "./ResultStatusControl";
+import NewManualRunForm from "./NewManualRunForm";
 
 type ResolvedExecutionSearchParams = {
   runId?: string;
@@ -14,6 +15,13 @@ type ExecutionPageProps = {
 type RunWithResults = Awaited<ReturnType<typeof getRunsForDashboard>>[number];
 type ResultWithRelations = RunWithResults["results"][number];
 type DefectWithLink = ResultWithRelations["defects"][number];
+
+type TestCaseForManualRun = {
+  id: string;
+  title: string;
+  suiteTitle: string;
+  projectName: string;
+};
 
 async function getRunsForDashboard() {
   return prisma.testRun.findMany({
@@ -35,6 +43,28 @@ async function getRunsForDashboard() {
       },
     },
   });
+}
+
+async function getTestCasesForManualRuns(): Promise<TestCaseForManualRun[]> {
+  const cases = await prisma.testCase.findMany({
+    include: {
+      suite: {
+        include: {
+          project: true,
+        },
+      },
+    },
+    orderBy: {
+      title: "asc",
+    },
+  });
+
+  return cases.map((tc) => ({
+    id: tc.id,
+    title: tc.title,
+    suiteTitle: tc.suite.title,
+    projectName: tc.suite.project.name,
+  }));
 }
 
 function summarizeRun(run: RunWithResults) {
@@ -76,9 +106,11 @@ function summarizeRun(run: RunWithResults) {
 function ExecutionDashboard({
   runs,
   query,
+  testCases,
 }: {
   runs: RunWithResults[];
   query?: ResolvedExecutionSearchParams;
+  testCases: TestCaseForManualRun[];
 }) {
   if (runs.length === 0) {
     return (
@@ -131,7 +163,7 @@ function ExecutionDashboard({
         </header>
 
         <div className="grid gap-4 md:grid-cols-[260px_minmax(0,1fr)]">
-          <aside className="space-y-2 rounded-lg border border-neutral-800 bg-neutral-950/80 p-3 text-xs">
+          <aside className="space-y-3 rounded-lg border border-neutral-800 bg-neutral-950/80 p-3 text-xs">
             <div className="mb-2 flex items-center justify-between text-[11px] font-semibold uppercase tracking-wide text-neutral-400">
               <span>Test runs</span>
               <span className="text-neutral-500">{runs.length}</span>
@@ -161,6 +193,13 @@ function ExecutionDashboard({
                   </Link>
                 );
               })}
+            </div>
+
+            <div className="mt-3 border-t border-neutral-800 pt-3">
+              <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-neutral-400">
+                New manual run
+              </div>
+              <NewManualRunForm testCases={testCases} />
             </div>
           </aside>
 
@@ -282,10 +321,11 @@ function ExecutionDashboard({
 }
 
 export default async function ExecutionPage({ searchParams }: ExecutionPageProps) {
-  const [runs, resolvedSearchParams] = await Promise.all([
+  const [runs, resolvedSearchParams, testCases] = await Promise.all([
     getRunsForDashboard(),
     searchParams,
+    getTestCasesForManualRuns(),
   ]);
 
-  return <ExecutionDashboard runs={runs} query={resolvedSearchParams} />;
+  return <ExecutionDashboard runs={runs} query={resolvedSearchParams} testCases={testCases} />;
 }
