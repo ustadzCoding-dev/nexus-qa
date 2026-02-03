@@ -1,0 +1,16 @@
+{
+  "projectId": "<your-project-id>",
+  "environment": "MAESTRO-STUDIO",
+  "testCases": [
+    {
+      "testCaseId": "<test-case-id-1>",
+      "flowPath": "C:/path/to/your/maestro/flows/login_success.yaml",
+      "expectedStatus": "PASSED"
+    },
+    {
+      "testCaseId": "<test-case-id-2>",
+      "flowPath": "C:/path/to/your/maestro/flows/login_negative_wrong_password.yaml",
+      "expectedStatus": "FAILED"
+    }
+  ]
+}

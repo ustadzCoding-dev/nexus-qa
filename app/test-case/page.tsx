@@ -306,34 +306,33 @@ async function TestCaseGridView({
                         : [];
 
                       return (
-                        <div
-                          key={testCase.id}
-                          className="flex items-center justify-between gap-1 px-1"
-                        >
-                          <Link
-                            href={`/test-case?caseId=${testCase.id}`}
-                            className={`flex-1 rounded-md px-2 py-1 text-[11px] leading-snug ${
-                              isActive
-                                ? "bg-neutral-100 text-neutral-900"
-                                : "text-neutral-200 hover:bg-neutral-800"
-                            }`}
-                          >
-                            <span className="font-medium">{testCase.title}</span>
-                            {reqs.length > 0 && (
-                              <span className="mt-0.5 flex flex-wrap gap-1 text-[10px] text-neutral-400">
-                                {reqs.map((req) => (
-                                  <Link
-                                    key={req.id}
-                                    href={`/test-case?requirementId=${req.id}`}
-                                    className="rounded border border-neutral-700 px-1 py-0.5 hover:border-neutral-400 hover:text-neutral-200"
-                                  >
-                                    {req.code}
-                                  </Link>
-                                ))}
-                              </span>
-                            )}
-                          </Link>
-                          <TestCaseActions testCaseId={testCase.id} hasHistory={hasHistory} />
+                        <div key={testCase.id} className="space-y-0.5 px-1">
+                          <div className="flex items-center justify-between gap-1">
+                            <Link
+                              href={`/test-case?projectId=${selectedProjectId}&caseId=${testCase.id}`}
+                              className={`flex-1 rounded-md px-2 py-1 text-[11px] leading-snug ${
+                                isActive
+                                  ? "bg-neutral-100 text-neutral-900"
+                                  : "text-neutral-200 hover:bg-neutral-800"
+                              }`}
+                            >
+                              <span className="font-medium">{testCase.title}</span>
+                            </Link>
+                            <TestCaseActions testCaseId={testCase.id} hasHistory={hasHistory} />
+                          </div>
+                          {reqs.length > 0 && (
+                            <div className="ml-2 flex flex-wrap gap-1 text-[10px] text-neutral-400">
+                              {reqs.map((req) => (
+                                <Link
+                                  key={req.id}
+                                  href={`/test-case?projectId=${selectedProjectId}&requirementId=${req.id}`}
+                                  className="rounded border border-neutral-700 px-1 py-0.5 hover:border-neutral-400 hover:text-neutral-200"
+                                >
+                                  {req.code}
+                                </Link>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       );
                     })}
