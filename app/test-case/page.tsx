@@ -10,6 +10,7 @@ type ResolvedSearchParams = {
   caseId?: string;
   suiteId?: string;
   q?: string;
+  requirementId?: string;
   [key: string]: string | string[] | undefined;
 };
 
@@ -65,6 +66,10 @@ function TestCaseGridView({
   const rawSuiteId = query?.suiteId;
   const suiteFilter = typeof rawSuiteId === "string" ? rawSuiteId : undefined;
 
+  const rawRequirementId = query?.requirementId;
+  const requirementFilter =
+    typeof rawRequirementId === "string" ? rawRequirementId : undefined;
+
   const rawQ = query?.q;
   const searchQuery =
     typeof rawQ === "string" ? rawQ.trim().toLowerCase() : "";
@@ -86,6 +91,18 @@ function TestCaseGridView({
           : false;
 
         if (!inTitle && !inRequirementCode) {
+          return false;
+        }
+      }
+
+      if (requirementFilter) {
+        const matchesRequirement = Array.isArray(testCase.requirements)
+          ? testCase.requirements.some(
+              (req: RequirementWithLink) => req.id === requirementFilter,
+            )
+          : false;
+
+        if (!matchesRequirement) {
           return false;
         }
       }
@@ -220,6 +237,9 @@ function TestCaseGridView({
               className="w-56 rounded-md border border-neutral-700 bg-neutral-950 px-2 py-1 text-[11px] text-neutral-100 outline-none focus:border-neutral-400"
             />
           </div>
+          {typeof query?.requirementId === "string" && (
+            <input type="hidden" name="requirementId" value={query.requirementId} />
+          )}
           <button
             type="submit"
             className="rounded-md border border-neutral-700 bg-neutral-900 px-3 py-1 text-[11px] font-medium text-neutral-100 hover:bg-neutral-800"
@@ -253,9 +273,9 @@ function TestCaseGridView({
                     {suite.testCases.map((testCase: TestCaseWithRelations) => {
                       const isActive = testCase.id === activeCase.id;
                       const hasHistory = testCase._count?.results > 0;
-                      const reqCodes = Array.isArray(testCase.requirements)
-                        ? testCase.requirements.map((req: RequirementWithLink) => req.code).join(", ")
-                        : "";
+                      const reqs = Array.isArray(testCase.requirements)
+                        ? (testCase.requirements as RequirementWithLink[])
+                        : [];
 
                       return (
                         <div
@@ -271,9 +291,17 @@ function TestCaseGridView({
                             }`}
                           >
                             <span className="font-medium">{testCase.title}</span>
-                            {reqCodes && (
-                              <span className="mt-0.5 block text-[10px] text-neutral-400">
-                                {reqCodes}
+                            {reqs.length > 0 && (
+                              <span className="mt-0.5 flex flex-wrap gap-1 text-[10px] text-neutral-400">
+                                {reqs.map((req) => (
+                                  <Link
+                                    key={req.id}
+                                    href={`/test-case?requirementId=${req.id}`}
+                                    className="rounded border border-neutral-700 px-1 py-0.5 hover:border-neutral-400 hover:text-neutral-200"
+                                  >
+                                    {req.code}
+                                  </Link>
+                                ))}
                               </span>
                             )}
                           </Link>
