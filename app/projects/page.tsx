@@ -3,6 +3,8 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import NewProjectForm from "./NewProjectForm";
 
+export const dynamic = "force-dynamic";
+
 type ProjectRow = {
   id: string;
   name: string;
