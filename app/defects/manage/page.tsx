@@ -91,7 +91,7 @@ function DefectsManageTable({ defects }: { defects: DefectRow[] }) {
                       Linked to {testCase.title}
                     </div>
                     {defect.description && (
-                      <div className="max-h-24 overflow-hidden whitespace-pre-line text-[11px] text-neutral-500">
+                      <div className="whitespace-pre-line text-[11px] text-neutral-500">
                         {defect.description}
                       </div>
                     )}

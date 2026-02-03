@@ -77,9 +77,19 @@ function TestCaseGridView({
   const allTestCases = filteredSuites
     .flatMap((suite: SuiteWithCases) => suite.testCases)
     .filter((testCase: TestCaseWithRelations) => {
-      if (searchQuery && !testCase.title.toLowerCase().includes(searchQuery)) {
-        return false;
+      if (searchQuery) {
+        const inTitle = testCase.title.toLowerCase().includes(searchQuery);
+        const inRequirementCode = Array.isArray(testCase.requirements)
+          ? testCase.requirements.some((req: RequirementWithLink) =>
+              req.code.toLowerCase().includes(searchQuery),
+            )
+          : false;
+
+        if (!inTitle && !inRequirementCode) {
+          return false;
+        }
       }
+
       return true;
     });
 
@@ -243,6 +253,9 @@ function TestCaseGridView({
                     {suite.testCases.map((testCase: TestCaseWithRelations) => {
                       const isActive = testCase.id === activeCase.id;
                       const hasHistory = testCase._count?.results > 0;
+                      const reqCodes = Array.isArray(testCase.requirements)
+                        ? testCase.requirements.map((req: RequirementWithLink) => req.code).join(", ")
+                        : "";
 
                       return (
                         <div
@@ -258,6 +271,11 @@ function TestCaseGridView({
                             }`}
                           >
                             <span className="font-medium">{testCase.title}</span>
+                            {reqCodes && (
+                              <span className="mt-0.5 block text-[10px] text-neutral-400">
+                                {reqCodes}
+                              </span>
+                            )}
                           </Link>
                           <TestCaseActions testCaseId={testCase.id} hasHistory={hasHistory} />
                         </div>
