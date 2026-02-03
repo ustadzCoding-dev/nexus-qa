@@ -5,6 +5,7 @@ import NewManualRunForm from "./NewManualRunForm";
 
 type ResolvedExecutionSearchParams = {
   runId?: string;
+  projectId?: string;
   [key: string]: string | string[] | undefined;
 };
 
@@ -23,11 +24,22 @@ type TestCaseForManualRun = {
   projectName: string;
 };
 
-async function getRunsForDashboard() {
+type ProjectOption = { id: string; name: string };
+
+async function getRunsForDashboard(projectId?: string) {
   return prisma.testRun.findMany({
     orderBy: { createdAt: "desc" },
     include: {
       results: {
+        where: projectId
+          ? {
+              testCase: {
+                suite: {
+                  projectId,
+                },
+              },
+            }
+          : undefined,
         include: {
           testCase: {
             include: {
@@ -45,8 +57,15 @@ async function getRunsForDashboard() {
   });
 }
 
-async function getTestCasesForManualRuns(): Promise<TestCaseForManualRun[]> {
+async function getTestCasesForManualRuns(projectId?: string): Promise<TestCaseForManualRun[]> {
   const cases = await prisma.testCase.findMany({
+    where: projectId
+      ? {
+          suite: {
+            projectId,
+          },
+        }
+      : undefined,
     include: {
       suite: {
         include: {
@@ -107,10 +126,14 @@ function ExecutionDashboard({
   runs,
   query,
   testCases,
+  projects,
+  selectedProjectId,
 }: {
   runs: RunWithResults[];
   query?: ResolvedExecutionSearchParams;
   testCases: TestCaseForManualRun[];
+  projects: ProjectOption[];
+  selectedProjectId: string;
 }) {
   if (runs.length === 0) {
     return (
@@ -130,6 +153,34 @@ function ExecutionDashboard({
               Back to Projects
             </Link>
           </header>
+          <form
+            method="GET"
+            action="/execution"
+            className="mt-3 inline-flex items-end gap-3 rounded-lg border border-neutral-800 bg-neutral-950/80 px-3 py-2 text-xs text-neutral-300"
+          >
+            <div className="flex flex-col gap-1">
+              <label className="text-[11px] uppercase tracking-wide text-neutral-500">
+                Project
+              </label>
+              <select
+                name="projectId"
+                defaultValue={selectedProjectId}
+                className="w-60 rounded-md border border-neutral-700 bg-neutral-950 px-2 py-1 text-[11px] text-neutral-100 outline-none focus:border-neutral-400"
+              >
+                {projects.map((project) => (
+                  <option key={project.id} value={project.id}>
+                    {project.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <button
+              type="submit"
+              className="inline-flex items-center rounded-md border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-[11px] font-medium text-neutral-100 hover:bg-neutral-800"
+            >
+              Apply
+            </button>
+          </form>
           <div className="rounded-lg border border-dashed border-neutral-800 bg-neutral-900/60 px-6 py-10 text-center text-sm text-neutral-400">
             Seed data creates at least one demo run. If you do not see it, ensure seeding completed successfully.
           </div>
@@ -167,6 +218,34 @@ function ExecutionDashboard({
             </p>
           </div>
         </header>
+        <form
+          method="GET"
+          action="/execution"
+          className="mb-3 inline-flex items-end gap-3 rounded-lg border border-neutral-800 bg-neutral-950/80 px-3 py-2 text-xs text-neutral-300"
+        >
+          <div className="flex flex-col gap-1">
+            <label className="text-[11px] uppercase tracking-wide text-neutral-500">
+              Project
+            </label>
+            <select
+              name="projectId"
+              defaultValue={selectedProjectId}
+              className="w-60 rounded-md border border-neutral-700 bg-neutral-950 px-2 py-1 text-[11px] text-neutral-100 outline-none focus:border-neutral-400"
+            >
+              {projects.map((project) => (
+                <option key={project.id} value={project.id}>
+                  {project.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <button
+            type="submit"
+            className="inline-flex items-center rounded-md border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-[11px] font-medium text-neutral-100 hover:bg-neutral-800"
+          >
+            Apply
+          </button>
+        </form>
 
         <div className="grid gap-4 md:grid-cols-[260px_minmax(0,1fr)]">
           <aside className="space-y-3 rounded-lg border border-neutral-800 bg-neutral-950/80 p-3 text-xs">
@@ -182,7 +261,7 @@ function ExecutionDashboard({
                 return (
                   <Link
                     key={run.id}
-                    href={`/execution?runId=${run.id}`}
+                    href={`/execution?projectId=${selectedProjectId}&runId=${run.id}`}
                     className={`flex flex-col rounded-md border px-2 py-1.5 text-[11px] leading-snug ${
                       isActive
                         ? "border-neutral-200 bg-neutral-100 text-neutral-950"
@@ -327,11 +406,58 @@ function ExecutionDashboard({
 }
 
 export default async function ExecutionPage({ searchParams }: ExecutionPageProps) {
-  const [runs, resolvedSearchParams, testCases] = await Promise.all([
-    getRunsForDashboard(),
+  const [projects, resolvedSearchParams] = await Promise.all([
+    prisma.project.findMany({
+      orderBy: { createdAt: "desc" },
+      select: {
+        id: true,
+        name: true,
+      },
+    }),
     searchParams,
-    getTestCasesForManualRuns(),
   ]);
 
-  return <ExecutionDashboard runs={runs} query={resolvedSearchParams} testCases={testCases} />;
+  if (projects.length === 0) {
+    return (
+      <div className="min-h-screen bg-neutral-950 text-neutral-50">
+        <div className="mx-auto flex max-w-6xl flex-col gap-4 px-6 py-8">
+          <header className="flex items-center justify-between gap-4">
+            <div>
+              <h1 className="text-2xl font-semibold tracking-tight">Execution & TSR</h1>
+              <p className="text-sm text-neutral-400">
+                No projects found in the database yet. Create a project first to manage executions.
+              </p>
+            </div>
+            <Link
+              href="/projects"
+              className="rounded-md border border-neutral-700 px-3 py-1.5 text-sm font-medium hover:bg-neutral-800"
+            >
+              Go to Projects
+            </Link>
+          </header>
+        </div>
+      </div>
+    );
+  }
+
+  const rawProjectId = resolvedSearchParams.projectId;
+  const selectedProjectId =
+    typeof rawProjectId === "string" && rawProjectId.length > 0
+      ? rawProjectId
+      : projects[0].id;
+
+  const [runs, testCases] = await Promise.all([
+    getRunsForDashboard(selectedProjectId),
+    getTestCasesForManualRuns(selectedProjectId),
+  ]);
+
+  return (
+    <ExecutionDashboard
+      runs={runs}
+      query={resolvedSearchParams}
+      testCases={testCases}
+      projects={projects}
+      selectedProjectId={selectedProjectId}
+    />
+  );
 }

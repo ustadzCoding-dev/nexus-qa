@@ -5,8 +5,19 @@ import DefectDetailsEditor from "../DefectDetailsEditor";
 
 export const dynamic = "force-dynamic";
 
-async function getDefectsForManage() {
+async function getDefectsForManage(projectId?: string) {
   return prisma.defect.findMany({
+    where: projectId
+      ? {
+          testResult: {
+            testCase: {
+              suite: {
+                projectId,
+              },
+            },
+          },
+        }
+      : undefined,
     orderBy: {
       status: "asc",
     },
@@ -131,7 +142,7 @@ function DefectsManageTable({ defects }: { defects: DefectRow[] }) {
                     <div className="text-neutral-100">{run.name}</div>
                     <div className="text-neutral-500">{run.environment}</div>
                     <Link
-                      href={`/execution?runId=${run.id}`}
+                      href={`/execution?projectId=${project.id}&runId=${run.id}`}
                       className="inline-flex text-[11px] text-sky-300 hover:underline"
                     >
                       View run
@@ -160,8 +171,62 @@ function DefectsManageTable({ defects }: { defects: DefectRow[] }) {
   );
 }
 
-export default async function DefectsManagePage() {
-  const defects = await getDefectsForManage();
+type DefectsManageSearchParams = {
+  projectId?: string;
+  [key: string]: string | string[] | undefined;
+};
+
+type DefectsManagePageProps = {
+  searchParams: Promise<DefectsManageSearchParams>;
+};
+
+export default async function DefectsManagePage({ searchParams }: DefectsManagePageProps) {
+  const [projects, resolvedSearchParams] = await Promise.all([
+    prisma.project.findMany({
+      orderBy: { createdAt: "desc" },
+      select: {
+        id: true,
+        name: true,
+      },
+    }),
+    searchParams,
+  ]);
+
+  if (projects.length === 0) {
+    return (
+      <div className="min-h-screen bg-neutral-950 text-neutral-50">
+        <div className="mx-auto flex max-w-6xl flex-col gap-4 px-6 py-8">
+          <header className="flex items-center justify-between gap-4">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2 text-xs text-neutral-400">
+                <Link href="/projects" className="hover:underline">
+                  Projects
+                </Link>
+                <span>/</span>
+                <Link href="/defects" className="hover:underline">
+                  Defects
+                </Link>
+                <span>/</span>
+                <span className="text-neutral-500">Manage</span>
+              </div>
+              <h1 className="text-2xl font-semibold tracking-tight">Manage Defects</h1>
+              <p className="text-sm text-neutral-400">
+                No projects found in the database yet. Create a project first to manage defects.
+              </p>
+            </div>
+          </header>
+        </div>
+      </div>
+    );
+  }
+
+  const rawProjectId = resolvedSearchParams.projectId;
+  const selectedProjectId =
+    typeof rawProjectId === "string" && rawProjectId.length > 0
+      ? rawProjectId
+      : projects[0].id;
+
+  const defects = await getDefectsForManage(selectedProjectId);
 
   return (
     <div className="min-h-screen bg-neutral-950 text-neutral-50">
@@ -185,6 +250,35 @@ export default async function DefectsManagePage() {
             </p>
           </div>
         </header>
+
+        <form
+          method="GET"
+          action="/defects/manage"
+          className="mb-3 inline-flex items-end gap-3 rounded-lg border border-neutral-800 bg-neutral-950/80 px-3 py-2 text-xs text-neutral-300"
+        >
+          <div className="flex flex-col gap-1">
+            <label className="text-[11px] uppercase tracking-wide text-neutral-500">
+              Project
+            </label>
+            <select
+              name="projectId"
+              defaultValue={selectedProjectId}
+              className="w-60 rounded-md border border-neutral-700 bg-neutral-950 px-2 py-1 text-[11px] text-neutral-100 outline-none focus:border-neutral-400"
+            >
+              {projects.map((project) => (
+                <option key={project.id} value={project.id}>
+                  {project.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <button
+            type="submit"
+            className="inline-flex items-center rounded-md border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-[11px] font-medium text-neutral-100 hover:bg-neutral-800"
+          >
+            Apply
+          </button>
+        </form>
 
         <DefectsManageTable defects={defects} />
       </div>
