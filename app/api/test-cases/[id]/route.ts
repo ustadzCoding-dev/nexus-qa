@@ -70,3 +70,30 @@ export async function PATCH(request: Request, context: RouteContext) {
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }
 }
+
+export async function DELETE(_request: Request, context: RouteContext) {
+  const { id } = await context.params;
+
+  if (!id) {
+    return NextResponse.json({ error: "Missing test case id" }, { status: 400 });
+  }
+
+  try {
+    const resultCount = await prisma.testResult.count({
+      where: { testCaseId: id },
+    });
+
+    if (resultCount > 0) {
+      return NextResponse.json(
+        { error: "Cannot delete test case with execution history (test results exist)." },
+        { status: 400 },
+      );
+    }
+
+    await prisma.testCase.delete({ where: { id } });
+
+    return NextResponse.json({ ok: true });
+  } catch (_error) {
+    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+  }
+}

@@ -133,6 +133,12 @@ function ExecutionDashboard({
           <div className="rounded-lg border border-dashed border-neutral-800 bg-neutral-900/60 px-6 py-10 text-center text-sm text-neutral-400">
             Seed data creates at least one demo run. If you do not see it, ensure seeding completed successfully.
           </div>
+          <div className="max-w-3xl">
+            <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-neutral-400">
+              New manual run
+            </div>
+            <NewManualRunForm testCases={testCases} />
+          </div>
         </div>
       </div>
     );

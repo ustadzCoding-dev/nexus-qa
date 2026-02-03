@@ -7,6 +7,7 @@ import NewRequirementForm from "./NewRequirementForm";
 import ProjectTestDataSection from "./ProjectTestDataSection";
 import NewMilestoneForm from "./NewMilestoneForm";
 import MilestoneActions from "./MilestoneActions";
+import RequirementActions from "./RequirementActions";
 
 type ProjectPageProps = {
   params: Promise<{
@@ -280,6 +281,7 @@ export default async function ProjectDetailPage({ params }: ProjectPageProps) {
                     <th className="px-4 py-3 text-left font-medium text-neutral-300">Title</th>
                     <th className="px-4 py-3 text-right font-medium text-neutral-300">Linked test cases</th>
                     <th className="px-4 py-3 text-right font-medium text-neutral-300">Coverage</th>
+                    <th className="px-4 py-3 text-right font-medium text-neutral-300">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -320,6 +322,9 @@ export default async function ProjectDetailPage({ params }: ProjectPageProps) {
                           >
                             {covered ? "COVERED" : "GAP"}
                           </span>
+                        </td>
+                        <td className="px-4 py-3 text-right align-top text-xs">
+                          <RequirementActions requirementId={req.id} />
                         </td>
                       </tr>
                     );

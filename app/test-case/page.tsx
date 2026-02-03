@@ -1,10 +1,10 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import TestCaseStepsEditor from "./TestCaseStepsEditor";
-import RunWithMaestroButton from "./RunWithMaestroButton";
-import AutomationPanel from "./AutomationPanel";
 import NewSuiteForm from "./NewSuiteForm";
 import NewTestCaseInlineForm from "./NewTestCaseInlineForm";
+import SuiteActions from "./SuiteActions";
+import TestCaseActions from "./TestCaseActions";
 
 type ResolvedSearchParams = {
   caseId?: string;
@@ -29,6 +29,11 @@ async function getProjectForGrid() {
                 orderBy: { order: "asc" },
               },
               requirements: true,
+              _count: {
+                select: {
+                  results: true,
+                },
+              },
             },
             orderBy: {
               title: "asc",
@@ -115,9 +120,12 @@ function TestCaseGridView({
                 <div className="space-y-2">
                   {suites.map((suite: SuiteWithCases) => (
                     <div key={suite.id} className="rounded-md border border-neutral-800 bg-neutral-950/80">
-                      <div className="flex items-center justify-between px-3 py-2">
+                      <div className="px-3 pt-2 pb-1">
                         <div className="truncate text-[11px] font-semibold uppercase tracking-wide text-neutral-300">
                           {suite.title}
+                        </div>
+                        <div className="mt-1">
+                          <SuiteActions suiteId={suite.id} />
                         </div>
                       </div>
                       <NewTestCaseInlineForm suiteId={suite.id} />
@@ -140,6 +148,8 @@ function TestCaseGridView({
   const activeSuite = filteredSuites.find((suite: SuiteWithCases) =>
     suite.testCases.some((tc: TestCaseWithRelations) => tc.id === activeCase.id),
   );
+
+  const activeCaseHasHistory = (activeCase._count?.results ?? 0) > 0;
 
   const requirementCodes = activeCase.requirements
     .map((req: RequirementWithLink) => req.code)
@@ -216,27 +226,41 @@ function TestCaseGridView({
             </div>
             <div className="max-h-[540px] space-y-2 overflow-auto px-2 py-2 text-xs">
               {filteredSuites.map((suite: SuiteWithCases) => (
-                <div key={suite.id} className="space-y-1 rounded-md border border-transparent hover:border-neutral-800">
-                  <div className="truncate px-2 pt-1 text-[11px] font-semibold uppercase tracking-wide text-neutral-400">
-                    {suite.title}
+                <div
+                  key={suite.id}
+                  className="space-y-1 rounded-md border border-transparent hover:border-neutral-800"
+                >
+                  <div className="px-2 pt-1">
+                    <div className="truncate text-[11px] font-semibold uppercase tracking-wide text-neutral-400">
+                      {suite.title}
+                    </div>
+                    <div className="mt-1">
+                      <SuiteActions suiteId={suite.id} />
+                    </div>
                   </div>
                   <NewTestCaseInlineForm suiteId={suite.id} />
                   <div className="space-y-0.5 pb-1">
                     {suite.testCases.map((testCase: TestCaseWithRelations) => {
                       const isActive = testCase.id === activeCase.id;
+                      const hasHistory = testCase._count?.results > 0;
 
                       return (
-                        <Link
+                        <div
                           key={testCase.id}
-                          href={`/test-case?caseId=${testCase.id}`}
-                          className={`block rounded-md px-2 py-1 text-[11px] leading-snug ${
-                            isActive
-                              ? "bg-neutral-100 text-neutral-900"
-                              : "text-neutral-200 hover:bg-neutral-800"
-                          }`}
+                          className="flex items-center justify-between gap-1 px-1"
                         >
-                          <span className="font-medium">{testCase.title}</span>
-                        </Link>
+                          <Link
+                            href={`/test-case?caseId=${testCase.id}`}
+                            className={`flex-1 rounded-md px-2 py-1 text-[11px] leading-snug ${
+                              isActive
+                                ? "bg-neutral-100 text-neutral-900"
+                                : "text-neutral-200 hover:bg-neutral-800"
+                            }`}
+                          >
+                            <span className="font-medium">{testCase.title}</span>
+                          </Link>
+                          <TestCaseActions testCaseId={testCase.id} hasHistory={hasHistory} />
+                        </div>
                       );
                     })}
                   </div>
@@ -276,18 +300,16 @@ function TestCaseGridView({
                     <p className="leading-snug">{activeCase.preCondition}</p>
                   </div>
                 )}
-                <RunWithMaestroButton testCaseId={activeCase.id} />
               </div>
             </div>
 
-            <TestCaseStepsEditor
-              testCaseId={activeCase.id}
-              initialSteps={activeCase.steps as StepWithOrder[]}
-            />
-            <AutomationPanel
-              testCaseId={activeCase.id}
-              initialAutomationYaml={activeCase.automationYaml as string | null}
-            />
+            <div key={activeCase.id}>
+              <TestCaseStepsEditor
+                testCaseId={activeCase.id}
+                initialSteps={activeCase.steps as StepWithOrder[]}
+                hasHistory={activeCaseHasHistory}
+              />
+            </div>
           </main>
         </div>
       </div>

@@ -12,11 +12,12 @@ type Step = {
 type Props = {
   testCaseId: string;
   initialSteps: Step[];
+  hasHistory?: boolean;
 };
 
 type SaveState = "idle" | "saving" | "saved" | "error";
 
-export default function TestCaseStepsEditor({ testCaseId, initialSteps }: Props) {
+export default function TestCaseStepsEditor({ testCaseId, initialSteps, hasHistory }: Props) {
   const [steps, setSteps] = useState<Step[]>(initialSteps);
   const [status, setStatus] = useState<SaveState>("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -34,6 +35,40 @@ export default function TestCaseStepsEditor({ testCaseId, initialSteps }: Props)
     );
     setStatus("idle");
     setErrorMessage(null);
+  };
+
+  const handleDeleteStep = async (stepId: string) => {
+    if (status === "saving") return;
+    if (hasHistory) return;
+
+    const confirmed = window.confirm("Delete this step?");
+    if (!confirmed) return;
+
+    setStatus("saving");
+    setErrorMessage(null);
+
+    try {
+      const response = await fetch(`/api/test-cases/${testCaseId}/steps/${stepId}`, {
+        method: "DELETE",
+      });
+
+      if (!response.ok) {
+        const data = (await response.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(data?.error || "Failed to delete step");
+      }
+
+      const data = (await response.json()) as { steps?: Step[] };
+
+      if (Array.isArray(data.steps)) {
+        setSteps(data.steps);
+      }
+
+      setStatus("idle");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown error";
+      setStatus("error");
+      setErrorMessage(message);
+    }
   };
 
   const handleSave = async () => {
@@ -76,10 +111,50 @@ export default function TestCaseStepsEditor({ testCaseId, initialSteps }: Props)
     }
   };
 
+  const handleAddStep = async () => {
+    setStatus("saving");
+    setErrorMessage(null);
+
+    try {
+      const response = await fetch(`/api/test-cases/${testCaseId}/steps`, {
+        method: "POST",
+      });
+
+      if (!response.ok) {
+        const data = (await response.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(data?.error || "Failed to create step");
+      }
+
+      const data = (await response.json()) as { steps?: Step[] };
+
+      if (Array.isArray(data.steps)) {
+        setSteps(data.steps);
+      }
+
+      setStatus("idle");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown error";
+      setStatus("error");
+      setErrorMessage(message);
+    }
+  };
+
   if (steps.length === 0) {
     return (
-      <div className="rounded-lg border border-dashed border-neutral-800 bg-neutral-950/60 px-6 py-8 text-center text-sm text-neutral-400">
-        This test case has no steps yet.
+      <div className="space-y-3 rounded-lg border border-dashed border-neutral-800 bg-neutral-950/60 px-6 py-6 text-center text-sm text-neutral-400">
+        <p>This test case has no steps yet.</p>
+        {status === "error" && errorMessage && (
+          <p className="text-xs text-rose-400" title={errorMessage}>
+            {errorMessage}
+          </p>
+        )}
+        <button
+          type="button"
+          onClick={handleAddStep}
+          className="rounded-md border border-neutral-700 bg-neutral-900 px-3 py-1 text-xs font-medium text-neutral-100 hover:bg-neutral-800"
+        >
+          + Add first step
+        </button>
       </div>
     );
   }
@@ -89,6 +164,14 @@ export default function TestCaseStepsEditor({ testCaseId, initialSteps }: Props)
       <div className="flex items-center justify-between text-xs text-neutral-400">
         <span>Steps</span>
         <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={handleAddStep}
+            disabled={status === "saving"}
+            className="rounded-md border border-neutral-700 bg-neutral-900 px-2 py-1 text-[11px] font-medium text-neutral-100 hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            + Add step
+          </button>
           {status === "saving" && <span className="text-neutral-300">Saving…</span>}
           {status === "saved" && <span className="text-emerald-400">Saved</span>}
           {status === "error" && errorMessage && (
@@ -114,6 +197,7 @@ export default function TestCaseStepsEditor({ testCaseId, initialSteps }: Props)
               <th className="w-12 px-3 py-2 text-left font-medium">#</th>
               <th className="px-3 py-2 text-left font-medium">Action</th>
               <th className="px-3 py-2 text-left font-medium">Expected</th>
+              {!hasHistory && <th className="w-20 px-3 py-2 text-right font-medium"></th>}
             </tr>
           </thead>
           <tbody>
@@ -139,6 +223,18 @@ export default function TestCaseStepsEditor({ testCaseId, initialSteps }: Props)
                     onChange={(event) => onChangeStep(step.id, "expected", event.target.value)}
                   />
                 </td>
+                {!hasHistory && (
+                  <td className="px-3 py-2 align-top text-right">
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteStep(step.id)}
+                      disabled={status === "saving"}
+                      className="rounded-md border border-rose-900/60 bg-rose-950/30 px-2 py-1 text-[11px] font-medium text-rose-200 hover:bg-rose-950/50 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      Delete
+                    </button>
+                  </td>
+                )}
               </tr>
             ))}
           </tbody>
