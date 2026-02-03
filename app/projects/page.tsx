@@ -15,16 +15,14 @@ type ProjectRow = {
   passRate: number;
 };
 
-type ProjectWithRelations = Prisma.ProjectGetPayload<{
-  include: {
-    requirements: true;
-    suites: {
-      include: {
-        testCases: {
-          include: {
-            results: true;
-          };
-        };
+type ProjectWithCounts = Prisma.ProjectGetPayload<{
+  select: {
+    id: true;
+    name: true;
+    createdAt: true;
+    _count: {
+      select: {
+        requirements: true;
       };
     };
   };
@@ -33,56 +31,74 @@ type ProjectWithRelations = Prisma.ProjectGetPayload<{
 async function getProjects(): Promise<ProjectRow[]> {
   const projects = await prisma.project.findMany({
     orderBy: { createdAt: "desc" },
-    include: {
-      requirements: true,
-      suites: {
-        include: {
-          testCases: {
-            include: {
-              results: true,
-            },
-          },
+    select: {
+      id: true,
+      name: true,
+      createdAt: true,
+      _count: {
+        select: {
+          requirements: true,
         },
       },
     },
   });
 
-  return projects.map((project: ProjectWithRelations) => {
-    const requirementsCount = project.requirements.length;
+  const rows = await Promise.all(
+    projects.map(async (project: ProjectWithCounts) => {
+      const [totalTestCases, groupedResults] = await Promise.all([
+        prisma.testCase.count({
+          where: {
+            suite: {
+              projectId: project.id,
+            },
+          },
+        }),
+        prisma.testResult.groupBy({
+          by: ["status"],
+          where: {
+            testCase: {
+              suite: {
+                projectId: project.id,
+              },
+            },
+          },
+          _count: {
+            _all: true,
+          },
+        }),
+      ]);
 
-    let totalTestCases = 0;
-    let totalResults = 0;
-    let passed = 0;
-    let failed = 0;
+      let totalResults = 0;
+      let passed = 0;
+      let failed = 0;
 
-    for (const suite of project.suites) {
-      totalTestCases += suite.testCases.length;
-      for (const testCase of suite.testCases) {
-        for (const result of testCase.results) {
-          totalResults += 1;
-          if (result.status === "PASSED") {
-            passed += 1;
-          } else if (result.status === "FAILED") {
-            failed += 1;
-          }
+      for (const row of groupedResults) {
+        const count = row._count._all;
+        totalResults += count;
+        if (row.status === "PASSED") {
+          passed += count;
+        } else if (row.status === "FAILED") {
+          failed += count;
         }
       }
-    }
 
-    const passRate = totalResults > 0 ? Math.round((passed / totalResults) * 100) : 0;
+      const passRate = totalResults > 0 ? Math.round((passed / totalResults) * 100) : 0;
 
-    return {
-      id: project.id,
-      name: project.name,
-      createdAt: project.createdAt,
-      requirementsCount,
-      totalTestCases,
-      totalResults,
-      passed,
-      failed,
-      passRate,
-    };
-  });
+      return {
+        id: project.id,
+        name: project.name,
+        createdAt: project.createdAt,
+        requirementsCount: project._count.requirements,
+        totalTestCases,
+        totalResults,
+        passed,
+        failed,
+        passRate,
+      };
+    }),
+  );
+
+  return rows;
 }
 
 export default async function ProjectsPage() {
