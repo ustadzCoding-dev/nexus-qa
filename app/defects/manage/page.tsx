@@ -3,6 +3,8 @@ import { prisma } from "@/lib/prisma";
 import DefectStatusSelect from "../DefectStatusSelect";
 import DefectDetailsEditor from "../DefectDetailsEditor";
 
+export const dynamic = "force-dynamic";
+
 async function getDefectsForManage() {
   return prisma.defect.findMany({
     orderBy: {
