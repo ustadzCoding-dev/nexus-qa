@@ -26,46 +26,69 @@ export async function PATCH(request: Request, context: RouteContext) {
     return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
   }
 
-  const { steps } = body as {
-    steps?: {
-      id: string;
-      action: string;
-      expected: string;
-    }[];
-  };
-
-  if (!Array.isArray(steps) || steps.length === 0) {
-    return NextResponse.json({ error: "steps must be a non-empty array" }, { status: 400 });
-  }
-
   try {
-    const existing = await prisma.testCase.findUnique({
-      where: { id },
-      select: { id: true },
-    });
+    const { steps, preCondition, postCondition, priority } = body as {
+      steps?: {
+        id: string;
+        action: string;
+        expected: string;
+      }[];
+      preCondition?: string | null;
+      postCondition?: string | null;
+      priority?: string;
+    };
 
-    if (!existing) {
-      return NextResponse.json({ error: "Test case not found" }, { status: 404 });
+    if (Array.isArray(steps)) {
+      if (steps.length === 0) {
+        return NextResponse.json({ error: "steps must be a non-empty array" }, { status: 400 });
+      }
+
+      const existing = await prisma.testCase.findUnique({
+        where: { id },
+        select: { id: true },
+      });
+
+      if (!existing) {
+        return NextResponse.json({ error: "Test case not found" }, { status: 404 });
+      }
+
+      await prisma.$transaction(
+        steps.map((step) =>
+          prisma.testStep.update({
+            where: { id: step.id },
+            data: {
+              action: step.action,
+              expected: step.expected,
+            },
+          }),
+        ),
+      );
+
+      const updatedSteps = await prisma.testStep.findMany({
+        where: { testCaseId: id },
+        orderBy: { order: "asc" },
+      });
+
+      return NextResponse.json({ steps: updatedSteps });
     }
 
-    await prisma.$transaction(
-      steps.map((step) =>
-        prisma.testStep.update({
-          where: { id: step.id },
-          data: {
-            action: step.action,
-            expected: step.expected,
-          },
-        }),
-      ),
+    if (preCondition !== undefined || postCondition !== undefined || priority !== undefined) {
+      const updated = await prisma.testCase.update({
+        where: { id },
+        data: {
+          ...(preCondition !== undefined ? { preCondition } : {}),
+          ...(postCondition !== undefined ? { postCondition } : {}),
+          ...(priority !== undefined ? { priority } : {}),
+        },
+      });
+
+      return NextResponse.json({ testCase: updated });
+    }
+
+    return NextResponse.json(
+      { error: "No valid fields provided to update" },
+      { status: 400 },
     );
-
-    const updatedSteps = await prisma.testStep.findMany({
-      where: { testCaseId: id },
-      orderBy: { order: "asc" },
-    });
-
-    return NextResponse.json({ steps: updatedSteps });
   } catch (_error) {
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }

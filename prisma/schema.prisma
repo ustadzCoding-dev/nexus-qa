@@ -53,6 +53,7 @@ model TestCase {
   id             String      @id @default(uuid())
   title          String
   preCondition   String?
+  postCondition  String?
   priority       String      @default("P2")
   suiteId        String
   suite          TestSuite   @relation(fields: [suiteId], references: [id])

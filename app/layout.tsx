@@ -44,7 +44,7 @@ export default function RootLayout({
                 <Link href="/execution" className="hover:text-neutral-50">
                   Execution & TSR
                 </Link>
-                <Link href="/defects/manage" className="hover:text-neutral-50">
+                <Link href="/defects" className="hover:text-neutral-50">
                   Defects
                 </Link>
               </nav>

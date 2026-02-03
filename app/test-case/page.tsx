@@ -5,12 +5,14 @@ import NewSuiteForm from "./NewSuiteForm";
 import NewTestCaseInlineForm from "./NewTestCaseInlineForm";
 import SuiteActions from "./SuiteActions";
 import TestCaseActions from "./TestCaseActions";
+import TestCaseDetailsEditor from "./TestCaseDetailsEditor";
 
 type ResolvedSearchParams = {
   caseId?: string;
   suiteId?: string;
   q?: string;
   requirementId?: string;
+   projectId?: string;
   [key: string]: string | string[] | undefined;
 };
 
@@ -39,8 +41,7 @@ async function getProjectForGrid() {
           },
         },
         orderBy: {
-          title: "asc",
-        },
+          title: "asc" },
       },
     },
   });
@@ -54,6 +55,7 @@ async function getStepsForCase(testCaseId: string) {
 }
 
 type ProjectWithGrid = NonNullable<Awaited<ReturnType<typeof getProjectForGrid>>>;
+type ProjectOption = { id: string; name: string };
 type SuiteWithCases = ProjectWithGrid["suites"][number];
 type TestCaseWithRelations = SuiteWithCases["testCases"][number];
 type RequirementWithLink = TestCaseWithRelations["requirements"][number];
@@ -61,9 +63,13 @@ type StepWithOrder = Awaited<ReturnType<typeof getStepsForCase>>[number];
 
 async function TestCaseGridView({
   project,
+  projects,
+  selectedProjectId,
   query,
 }: {
   project: ProjectWithGrid;
+  projects: ProjectOption[];
+  selectedProjectId: string;
   query?: ResolvedSearchParams;
 }) {
   const suites = project.suites;
@@ -216,6 +222,22 @@ async function TestCaseGridView({
         >
           <div className="flex flex-col gap-1">
             <label className="text-[11px] uppercase tracking-wide text-neutral-500">
+              Project
+            </label>
+            <select
+              name="projectId"
+              defaultValue={selectedProjectId}
+              className="w-60 rounded-md border border-neutral-700 bg-neutral-950 px-2 py-1 text-[11px] text-neutral-100 outline-none focus:border-neutral-400"
+            >
+              {projects.map((proj) => (
+                <option key={proj.id} value={proj.id}>
+                  {proj.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-[11px] uppercase tracking-wide text-neutral-500">
               Suite
             </label>
             <select
@@ -333,9 +355,6 @@ async function TestCaseGridView({
                       Suite: {activeSuite.title}
                     </span>
                   )}
-                  <span className="rounded-full border border-neutral-700 px-2 py-0.5">
-                    Priority: {activeCase.priority}
-                  </span>
                   {requirementCodes && (
                     <span className="rounded-full border border-neutral-700 px-2 py-0.5">
                       Requirements: {requirementCodes}
@@ -343,16 +362,12 @@ async function TestCaseGridView({
                   )}
                 </div>
               </div>
-              <div className="flex flex-col items-end gap-2">
-                {activeCase.preCondition && (
-                  <div className="max-w-sm rounded-md border border-neutral-800 bg-neutral-950/80 px-3 py-2 text-xs text-neutral-300">
-                    <div className="mb-0.5 text-[10px] font-semibold uppercase tracking-wide text-neutral-500">
-                      Pre-condition
-                    </div>
-                    <p className="leading-snug">{activeCase.preCondition}</p>
-                  </div>
-                )}
-              </div>
+              <TestCaseDetailsEditor
+                testCaseId={activeCase.id}
+                initialPreCondition={activeCase.preCondition ?? null}
+                initialPostCondition={activeCase.postCondition ?? null}
+                initialPriority={activeCase.priority}
+              />
             </div>
 
             <div key={activeCase.id}>
@@ -370,12 +385,18 @@ async function TestCaseGridView({
 }
 
 export default async function TestCaseGridPage({ searchParams }: TestCaseGridPageProps) {
-  const [project, resolvedSearchParams] = await Promise.all([
-    getProjectForGrid(),
+  const [projects, resolvedSearchParams] = await Promise.all([
+    prisma.project.findMany({
+      orderBy: { createdAt: "desc" },
+      select: {
+        id: true,
+        name: true,
+      },
+    }),
     searchParams,
   ]);
 
-  if (!project) {
+  if (projects.length === 0) {
     return (
       <div className="min-h-screen bg-neutral-950 text-neutral-50">
         <div className="mx-auto flex max-w-6xl flex-col gap-4 px-6 py-8">
@@ -398,5 +419,67 @@ export default async function TestCaseGridPage({ searchParams }: TestCaseGridPag
     );
   }
 
-  return <TestCaseGridView project={project} query={resolvedSearchParams} />;
+  const rawProjectId = resolvedSearchParams.projectId;
+  const selectedProjectId =
+    typeof rawProjectId === "string" && rawProjectId.length > 0
+      ? rawProjectId
+      : projects[0].id;
+
+  const project = await prisma.project.findFirst({
+    where: { id: selectedProjectId },
+    include: {
+      suites: {
+        include: {
+          testCases: {
+            include: {
+              requirements: true,
+              _count: {
+                select: {
+                  results: true,
+                },
+              },
+            },
+            orderBy: {
+              title: "asc",
+            },
+          },
+        },
+        orderBy: {
+          title: "asc",
+        },
+      },
+    },
+  });
+
+  if (!project) {
+    return (
+      <div className="min-h-screen bg-neutral-950 text-neutral-50">
+        <div className="mx-auto flex max-w-6xl flex-col gap-4 px-6 py-8">
+          <header className="flex items-center justify-between gap-4">
+            <div>
+              <h1 className="text-2xl font-semibold tracking-tight">Test Case Grid</h1>
+              <p className="text-sm text-neutral-400">
+                Selected project not found. Please choose another project.
+              </p>
+            </div>
+            <Link
+              href="/projects"
+              className="rounded-md border border-neutral-700 px-3 py-1.5 text-sm font-medium hover:bg-neutral-800"
+            >
+              Go to Projects
+            </Link>
+          </header>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <TestCaseGridView
+      project={project}
+      projects={projects}
+      selectedProjectId={selectedProjectId}
+      query={resolvedSearchParams}
+    />
+  );
 }
