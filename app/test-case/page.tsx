@@ -26,9 +26,6 @@ async function getProjectForGrid() {
         include: {
           testCases: {
             include: {
-              steps: {
-                orderBy: { order: "asc" },
-              },
               requirements: true,
               _count: {
                 select: {
@@ -49,13 +46,20 @@ async function getProjectForGrid() {
   });
 }
 
+async function getStepsForCase(testCaseId: string) {
+  return prisma.testStep.findMany({
+    where: { testCaseId },
+    orderBy: { order: "asc" },
+  });
+}
+
 type ProjectWithGrid = NonNullable<Awaited<ReturnType<typeof getProjectForGrid>>>;
 type SuiteWithCases = ProjectWithGrid["suites"][number];
 type TestCaseWithRelations = SuiteWithCases["testCases"][number];
 type RequirementWithLink = TestCaseWithRelations["requirements"][number];
-type StepWithOrder = TestCaseWithRelations["steps"][number];
+type StepWithOrder = Awaited<ReturnType<typeof getStepsForCase>>[number];
 
-function TestCaseGridView({
+async function TestCaseGridView({
   project,
   query,
 }: {
@@ -177,6 +181,8 @@ function TestCaseGridView({
   );
 
   const activeCaseHasHistory = (activeCase._count?.results ?? 0) > 0;
+
+  const stepsForActiveCase = await getStepsForCase(activeCase.id);
 
   const requirementCodes = activeCase.requirements
     .map((req: RequirementWithLink) => req.code)
@@ -352,7 +358,7 @@ function TestCaseGridView({
             <div key={activeCase.id}>
               <TestCaseStepsEditor
                 testCaseId={activeCase.id}
-                initialSteps={activeCase.steps as StepWithOrder[]}
+                initialSteps={stepsForActiveCase as StepWithOrder[]}
                 hasHistory={activeCaseHasHistory}
               />
             </div>
