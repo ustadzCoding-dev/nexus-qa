@@ -232,6 +232,14 @@ export default async function ProjectDetailPage({ params }: ProjectPageProps) {
               Requirement Traceability Matrix (RTM) and execution snapshot for this project.
             </p>
           </div>
+          <div className="flex items-center gap-2">
+            <Link
+              href={`/test-case?projectId=${project.id}`}
+              className="rounded-md border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-xs font-medium text-neutral-100 hover:bg-neutral-800"
+            >
+              Open Test Case Grid
+            </Link>
+          </div>
         </header>
 
         <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
